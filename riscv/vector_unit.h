@@ -170,15 +170,28 @@ public:
     return *(EG*)((char*)reg_file + vReg * (VLEN >> 3) + start_byte);
   }
 
+private:
+  uint8_t& mask_byte(reg_t vReg, reg_t n)
+  {
+    reg_t byte = n >> 3;
+#ifdef WORDS_BIGENDIAN
+    byte ^= vlenb - 1;
+#endif
+    return static_cast<uint8_t*>(reg_file)[vReg * vlenb + byte];
+  }
+
+public:
   bool mask_elt(reg_t vReg, reg_t n)
   {
-    return (elt<uint8_t>(vReg, n / 8) >> (n % 8)) & 1;
+    return (mask_byte(vReg, n) >> (n & 7)) & 1;
   }
 
   void set_mask_elt(reg_t vReg, reg_t n, bool value)
   {
-    auto& e = elt<uint8_t>(vReg, n / 8, true);
-    e = (e & ~(1U << (n % 8))) | (value << (n % 8));
+    log_elt_write_if_needed(vReg);
+    auto& e = mask_byte(vReg, n);
+    const uint8_t bit = 1U << (n & 7);
+    e = (e & ~bit) | (value ? bit : 0);
   }
 
 private:
