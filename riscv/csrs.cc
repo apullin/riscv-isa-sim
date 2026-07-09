@@ -2126,18 +2126,34 @@ void sscsrind_reg_csr_t::add_ireg_proxy(const reg_t iselect_value, csr_t_p csr) 
 smcntrpmf_csr_t::smcntrpmf_csr_t(processor_t* const proc, const reg_t addr) : basic_csr_t(proc, addr, 0) {
 }
 
-reg_t smcntrpmf_csr_t::read_prev() const noexcept {
+#ifdef __clang__
+# define SMCNTRPMF_READ_PREV_NOINLINE NOINLINE
+#else
+# define SMCNTRPMF_READ_PREV_NOINLINE
+#endif
+
+reg_t SMCNTRPMF_READ_PREV_NOINLINE smcntrpmf_csr_t::read_prev() const noexcept {
   if (likely(!prev_val))
+#ifdef __clang__
+    return basic_csr_t::read();
+#else
     return read();
+#endif
   return *prev_val;
 }
+
+#undef SMCNTRPMF_READ_PREV_NOINLINE
 
 void smcntrpmf_csr_t::reset_prev() noexcept {
   prev_val.reset();
 }
 
 bool smcntrpmf_csr_t::unlogged_write(const reg_t val) noexcept {
+#ifdef __clang__
+  prev_val = basic_csr_t::read();
+#else
   prev_val = read();
+#endif
 
   const reg_t mask = !proc->extension_enabled_const(EXT_SMCNTRPMF) ? 0 :
     MHPMEVENT_MINH |
