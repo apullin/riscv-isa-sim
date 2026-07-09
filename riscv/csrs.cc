@@ -1343,6 +1343,10 @@ bool wide_counter_csr_t::unlogged_write(const reg_t val) noexcept {
 // Returns true if counting is not inhibited by Smcntrpmf.
 // Note that minstretcfg / mcyclecfg / mhpmevent* share the same inhibit bits.
 bool wide_counter_csr_t::is_counting_enabled() const noexcept {
+  const reg_t config = config_csr->read_prev();
+  if (likely(config == 0))
+    return true;
+
   auto prv = state->prv_changed ? state->prev_prv : state->prv;
   auto v = state->v_changed ? state->prev_v : state->v;
   auto mask = MHPMEVENT_MINH;
@@ -1351,7 +1355,7 @@ bool wide_counter_csr_t::is_counting_enabled() const noexcept {
   } else if (prv == PRV_U) {
     mask = v ? MHPMEVENT_VUINH : MHPMEVENT_UINH;
   }
-  return (config_csr->read_prev() & mask) == 0;
+  return (config & mask) == 0;
 }
 
 // implement class time_counter_csr_t
@@ -2118,8 +2122,9 @@ smcntrpmf_csr_t::smcntrpmf_csr_t(processor_t* const proc, const reg_t addr) : ba
 }
 
 reg_t smcntrpmf_csr_t::read_prev() const noexcept {
-  reg_t val = prev_val.value_or(read());
-  return val;
+  if (likely(!prev_val))
+    return read();
+  return *prev_val;
 }
 
 void smcntrpmf_csr_t::reset_prev() noexcept {
