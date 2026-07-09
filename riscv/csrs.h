@@ -798,6 +798,8 @@ class vector_csr_t: public basic_csr_t {
   virtual void verify_permissions(insn_t insn, bool write) const override;
   // Write without regard to mask, and without touching mstatus.VS
   void write_raw(const reg_t val) noexcept;
+  // Internal write for instruction implementations with commit logging disabled.
+  void write_without_logging(const reg_t val) noexcept;
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;
  private:

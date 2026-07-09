@@ -7,6 +7,13 @@
 #include "zvbdot.h"
 #include <functional>
 
+#define WRITE_VSTART(value) do { \
+  if constexpr (DECODE_MACRO_USAGE_LOGGED) \
+    P.VU.vstart->write(value); \
+  else \
+    P.VU.vstart->write_without_logging(value); \
+} while (0)
+
 //
 // vector: masking skip helper
 //
@@ -240,7 +247,7 @@ static inline bool is_overlapped_widen(const int astart, int asize,
  }
 
 #define VECTOR_END \
-  P.VU.vstart->write(0)
+  WRITE_VSTART(0)
 
 #define VI_LOOP_END \
   VI_LOOP_END_BASE \
@@ -1245,7 +1252,7 @@ VI_VX_ULOOP({ \
   for (reg_t i = 0; i < vl; ++i) { \
     VI_ELEMENT_SKIP; \
     VI_STRIP(i); \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     for (reg_t fn = 0; fn < nf; ++fn) { \
       elt_width##_t val = MMU.load<elt_width##_t>( \
         baseAddr + (stride) + (offset) * sizeof(elt_width##_t)); \
@@ -1283,7 +1290,7 @@ VI_VX_ULOOP({ \
     VI_LDST_GET_INDEX(elt_width); \
     VI_ELEMENT_SKIP; \
     VI_STRIP(i); \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     for (reg_t fn = 0; fn < nf; ++fn) { \
       switch (P.VU.vsew) { \
         case e8: \
@@ -1316,7 +1323,7 @@ VI_VX_ULOOP({ \
   for (reg_t i = 0; i < vl; ++i) { \
     VI_STRIP(i) \
     VI_ELEMENT_SKIP; \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     for (reg_t fn = 0; fn < nf; ++fn) { \
       elt_width##_t val = P.VU.elt<elt_width##_t>(vs3 + fn * emul, vreg_inx); \
       MMU.store<elt_width##_t>( \
@@ -1337,7 +1344,7 @@ VI_VX_ULOOP({ \
     VI_LDST_GET_INDEX(elt_width); \
     VI_STRIP(i) \
     VI_ELEMENT_SKIP; \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     for (reg_t fn = 0; fn < nf; ++fn) { \
       switch (P.VU.vsew) { \
       case e8: \
@@ -1379,7 +1386,7 @@ VI_VX_ULOOP({ \
           baseAddr + (i * nf + fn) * sizeof(elt_width##_t)); \
       } catch (trap_t& t) { \
         if (i == 0) { \
-          P.VU.vstart->write(0); /* dirty VS */ \
+          WRITE_VSTART(0); /* dirty VS */ \
           throw; /* Only take exception on zeroth element */ \
         } \
         /* Reduce VL if an exception occurs on a later element */ \
@@ -1406,7 +1413,7 @@ VI_VX_ULOOP({ \
   const reg_t elt_per_reg = P.VU.vlenb / sizeof(elt_width ## _t); \
   const reg_t size = len * elt_per_reg; \
   for (reg_t i = P.VU.vstart->read(); i < size; i++) { \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     auto val = MMU.load<elt_width##_t>(baseAddr + i * sizeof(elt_width ## _t)); \
     P.VU.elt<elt_width ## _t>(vd, i, true) = val; \
   } \
@@ -1420,7 +1427,7 @@ VI_VX_ULOOP({ \
   require_align(vs3, len); \
   const reg_t size = len * P.VU.vlenb; \
   for (reg_t i = P.VU.vstart->read(); i < size; i++) { \
-    P.VU.vstart->write(i); \
+    WRITE_VSTART(i); \
     auto val = P.VU.elt<uint8_t>(vs3, i); \
     MMU.store<uint8_t>(baseAddr + i, val); \
   } \

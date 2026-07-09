@@ -12,5 +12,7 @@
 #include "debug_defines.h"
 #include <assert.h>
 
+reg_t fast_rv64i_add(processor_t*, insn_t, reg_t)
+  __attribute__((aligned(64)));
 reg_t fast_rv64i_csrrs(processor_t*, insn_t, reg_t)
   __attribute__((aligned(64)));

@@ -44,7 +44,7 @@
 
 #define VI_VZIP_VV_LOOP_END \
   } \
-  P.VU.vstart->write(0);
+  WRITE_VSTART(0);
 
 #define VI_VZIP_VV_LOOP(VS1_IDX, VS2_IDX) \
   VI_VZIP_VV_CHECK \
