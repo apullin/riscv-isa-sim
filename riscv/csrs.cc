@@ -1649,6 +1649,12 @@ float_csr_t::float_csr_t(processor_t* const proc, const reg_t addr, const reg_t 
 }
 
 void float_csr_t::verify_permissions(insn_t insn, bool write) const {
+  if (!write && likely(!state->v) &&
+      likely(!proc->extension_enabled(EXT_ZFINX)) &&
+      likely(proc->extension_enabled('F')) &&
+      likely((state->mstatus->read_raw() & SSTATUS_FS) != 0))
+    return;
+
   masked_csr_t::verify_permissions(insn, write);
 
   if (!((proc->extension_enabled('F') && STATE.sstatus->enabled(SSTATUS_FS))
