@@ -257,6 +257,9 @@ class vsstatus_csr_t final: public base_status_csr_t {
   vsstatus_csr_t(processor_t* const proc, const reg_t addr);
 
   virtual reg_t read() const noexcept override;
+  reg_t read_status_bits(const reg_t bits) const noexcept {
+    return val & bits;
+  }
 
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;
@@ -271,6 +274,9 @@ class mstatus_csr_t final: public base_status_csr_t {
   mstatus_csr_t(processor_t* const proc, const reg_t addr);
 
   reg_t read() const noexcept override;
+  reg_t read_raw() const noexcept {
+    return val;
+  }
 
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;
@@ -326,6 +332,7 @@ class sstatus_proxy_csr_t final: public base_status_csr_t {
   sstatus_proxy_csr_t(processor_t* const proc, const reg_t addr, mstatus_csr_t_p mstatus);
 
   virtual reg_t read() const noexcept override;
+  reg_t read_status_bits(const reg_t bits) const noexcept;
 
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;

@@ -682,6 +682,10 @@ reg_t sstatus_proxy_csr_t::read() const noexcept {
   return mstatus->read() & adj_read_mask;
 }
 
+reg_t sstatus_proxy_csr_t::read_status_bits(const reg_t bits) const noexcept {
+  return mstatus->read_raw() & bits;
+}
+
 // implement class mstatus_csr_t
 mstatus_csr_t::mstatus_csr_t(processor_t* const proc, const reg_t addr):
   base_status_csr_t(proc, addr),
@@ -821,8 +825,8 @@ sstatus_csr_t::sstatus_csr_t(processor_t* const proc, sstatus_proxy_csr_t_p orig
 
 void sstatus_csr_t::dirty(const reg_t dirties) {
   // As an optimization, return early if already dirty.
-  if ((orig_sstatus->read() & dirties) == dirties) {
-    if (likely(!state->v || (virt_sstatus->read() & dirties) == dirties))
+  if (orig_sstatus->read_status_bits(dirties) == dirties) {
+    if (likely(!state->v || virt_sstatus->read_status_bits(dirties) == dirties))
       return;
   }
 
@@ -837,8 +841,8 @@ void sstatus_csr_t::dirty(const reg_t dirties) {
 }
 
 bool sstatus_csr_t::enabled(const reg_t which) {
-  if ((orig_sstatus->read() & which) != 0) {
-    if (!state->v || (virt_sstatus->read() & which) != 0)
+  if (orig_sstatus->read_status_bits(which) != 0) {
+    if (!state->v || virt_sstatus->read_status_bits(which) != 0)
       return true;
   }
   return false;
