@@ -796,6 +796,8 @@ class vector_csr_t: public basic_csr_t {
  public:
   vector_csr_t(processor_t* const proc, const reg_t addr, const reg_t mask, const reg_t init=0);
   virtual void verify_permissions(insn_t insn, bool write) const override;
+  // Internal stored-value read for vector instruction implementations.
+  reg_t read_raw() const noexcept { return basic_csr_t::read(); }
   // Write without regard to mask, and without touching mstatus.VS
   void write_raw(const reg_t val) noexcept;
   // Internal write for instruction implementations with commit logging disabled.
