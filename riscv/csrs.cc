@@ -2114,10 +2114,9 @@ bool sscsrind_reg_csr_t::unlogged_write(const reg_t val) noexcept {
 
 // Returns the actual CSR that maps to value in *siselect or nullptr if no mapping exists
 csr_t_p sscsrind_reg_csr_t::get_reg() const noexcept {
-  auto proxy = ireg_proxy;
   auto isel = iselect->read();
-  auto it = proxy.find(isel);
-  return it != proxy.end() ? it->second : nullptr;
+  auto it = ireg_proxy.find(isel);
+  return it != ireg_proxy.end() ? it->second : nullptr;
 }
 
 void sscsrind_reg_csr_t::add_ireg_proxy(const reg_t iselect_value, csr_t_p csr) {
