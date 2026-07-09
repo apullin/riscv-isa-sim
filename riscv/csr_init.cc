@@ -4,6 +4,15 @@
 void state_t::add_csr(reg_t addr, const csr_t_p& csr)
 {
   csrmap[addr] = csr;
+  if (addr < csrmap_cache.size())
+    csrmap_cache[addr] = csr.get();
+}
+
+void state_t::remove_csr(reg_t addr)
+{
+  csrmap.erase(addr);
+  if (addr < csrmap_cache.size())
+    csrmap_cache[addr] = nullptr;
 }
 
 #define add_const_ext_csr(ext, addr, csr) do { auto csr__ = (csr); if (proc->extension_enabled_const(ext)) { add_csr(addr, csr__); } } while (0)

@@ -102,6 +102,8 @@ void state_t::reset(processor_t* const proc, reg_t max_isa)
   pc = DEFAULT_RSTVEC;
   XPR.reset();
   FPR.reset();
+  csrmap.clear();
+  csrmap_cache.fill(nullptr);
 
   prv = prev_prv = PRV_M;
   v = prev_v = false;
@@ -625,8 +627,16 @@ void processor_t::disasm(insn_t insn)
 void processor_t::put_csr(int which, reg_t val)
 {
   val = zext_xlen(val);
+  const unsigned which_u = static_cast<unsigned>(which);
+  if (likely(which_u < state.csrmap_cache.size())) {
+    if (csr_t* csr = state.csrmap_cache[which_u]) {
+      csr->write(val);
+      return;
+    }
+  }
+
   auto search = state.csrmap.find(which);
-  if (search != state.csrmap.end()) {
+  if (unlikely(search != state.csrmap.end())) {
     search->second->write(val);
     return;
   }
@@ -637,8 +647,17 @@ void processor_t::put_csr(int which, reg_t val)
 // side effects on reads.
 reg_t processor_t::get_csr(int which, insn_t insn, bool write, bool peek)
 {
+  const unsigned which_u = static_cast<unsigned>(which);
+  if (likely(which_u < state.csrmap_cache.size())) {
+    if (csr_t* csr = state.csrmap_cache[which_u]) {
+      if (!peek)
+        csr->verify_permissions(insn, write);
+      return csr->read();
+    }
+  }
+
   auto search = state.csrmap.find(which);
-  if (search != state.csrmap.end()) {
+  if (unlikely(search != state.csrmap.end())) {
     if (!peek)
       search->second->verify_permissions(insn, write);
     return search->second->read();

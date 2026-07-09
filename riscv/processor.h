@@ -17,6 +17,7 @@
 #include "triggers.h"
 #include "../fesvr/memif.h"
 #include "vector_unit.h"
+#include <array>
 
 #define FIRST_HPMCOUNTER 3
 #define N_HPMCOUNTERS 29
@@ -80,6 +81,7 @@ struct state_t
   void add_iprio_proxy(processor_t* const proc, sscsrind_reg_csr_t_p ireg);
   void reset(processor_t* const proc, reg_t max_isa);
   void add_csr(reg_t addr, const csr_t_p& csr);
+  void remove_csr(reg_t addr);
 
   reg_t pc;
   regfile_t<reg_t, NXPR, true> XPR;
@@ -87,6 +89,7 @@ struct state_t
 
   // control and status registers
   std::unordered_map<reg_t, csr_t_p> csrmap;
+  std::array<csr_t*, NCSR> csrmap_cache;
   reg_t prv;    // TODO: Can this be an enum instead?
   reg_t prev_prv;
   bool prv_changed;

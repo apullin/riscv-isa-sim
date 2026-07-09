@@ -323,7 +323,7 @@ bool mpmpdeleg_csr_t::unlogged_write(const reg_t val) noexcept {
   bool write_success = false;
   if (max_locked_pmp_index < (int)new_val) {
     for (size_t i = 0; i < proc->n_pmp; ++i)
-      state->csrmap.erase(CSR_PMPADDR0 + i);
+      state->remove_csr(CSR_PMPADDR0 + i);
 
     proc->n_pmp = new_val;
     for (size_t i = 0; i < proc->n_pmp; ++i) {
