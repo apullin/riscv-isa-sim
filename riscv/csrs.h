@@ -332,7 +332,9 @@ class sstatus_proxy_csr_t final: public base_status_csr_t {
   sstatus_proxy_csr_t(processor_t* const proc, const reg_t addr, mstatus_csr_t_p mstatus);
 
   virtual reg_t read() const noexcept override;
-  reg_t read_status_bits(const reg_t bits) const noexcept;
+  reg_t read_status_bits(const reg_t bits) const noexcept {
+    return mstatus->read_raw() & bits;
+  }
 
  protected:
   virtual bool unlogged_write(const reg_t val) noexcept override;

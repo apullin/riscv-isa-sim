@@ -682,10 +682,6 @@ reg_t sstatus_proxy_csr_t::read() const noexcept {
   return mstatus->read() & adj_read_mask;
 }
 
-reg_t sstatus_proxy_csr_t::read_status_bits(const reg_t bits) const noexcept {
-  return mstatus->read_raw() & bits;
-}
-
 // implement class mstatus_csr_t
 mstatus_csr_t::mstatus_csr_t(processor_t* const proc, const reg_t addr):
   base_status_csr_t(proc, addr),
