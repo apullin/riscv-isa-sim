@@ -104,19 +104,21 @@ public:
   // vector element for various SEW
   template<typename T> T& elt(reg_t vReg, reg_t n, bool is_write = false) {
     assert(vsew != 0);
-    assert((VLEN >> 3)/sizeof(T) > 0);
-    reg_t elts_per_reg = (VLEN >> 3) / (sizeof(T));
-    vReg += n / elts_per_reg;
-    n = n % elts_per_reg;
+    assert(vlenb / sizeof(T) > 0);
+    static_assert((sizeof(T) & (sizeof(T) - 1)) == 0);
+    const reg_t elements_per_reg = vlenb / sizeof(T);
+    const unsigned elements_per_reg_log2 = __builtin_ctzll(elements_per_reg);
+    vReg += n >> elements_per_reg_log2;
+    n &= elements_per_reg - 1;
 #ifdef WORDS_BIGENDIAN
     // "V" spec 0.7.1 requires lower indices to map to lower significant
     // bits when changing SEW, thus we need to index from the end on BE.
-    n ^= elts_per_reg - 1;
+    n ^= elements_per_reg - 1;
 #endif
     if (is_write)
       log_elt_write_if_needed(vReg);
 
-    T *regStart = (T*)((char*)reg_file + vReg * (VLEN >> 3));
+    T *regStart = (T*)((char*)reg_file + vReg * vlenb);
     return regStart[n];
   }
 

@@ -208,7 +208,7 @@ bool processor_t::slow_path() const
 }
 
 // fetch/decode/execute loop
-void processor_t::step(size_t n)
+void __attribute__((aligned(64))) processor_t::step(size_t n)
 {
   mmu_t* _mmu = mmu;
 
