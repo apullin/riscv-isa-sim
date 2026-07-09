@@ -1419,6 +1419,11 @@ bool counter_proxy_csr_t::myenable(csr_t_p counteren) const noexcept {
 }
 
 void counter_proxy_csr_t::verify_permissions(insn_t insn, bool write) const {
+#ifdef __clang__
+  if (!write && likely(state->prv == PRV_M) && likely(!state->v))
+    return;
+#endif
+
   proxy_csr_t::verify_permissions(insn, write);
 
   const bool mctr_ok = (state->prv < PRV_M) ? myenable(state->mcounteren) : true;
