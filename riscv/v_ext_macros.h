@@ -14,6 +14,17 @@
     P.VU.vstart->write_without_logging(value); \
 } while (0)
 
+#define VI_LDST_PREPARE_VSTART(index) do { \
+  if constexpr (DECODE_MACRO_USAGE_LOGGED) \
+    WRITE_VSTART(index); \
+} while (0)
+
+#define VI_LDST_RETHROW(index) catch (...) { \
+  if constexpr (!DECODE_MACRO_USAGE_LOGGED) \
+    WRITE_VSTART(index); \
+  throw; \
+}
+
 //
 // vector: masking skip helper
 //
@@ -1252,12 +1263,14 @@ VI_VX_ULOOP({ \
   for (reg_t i = 0; i < vl; ++i) { \
     VI_ELEMENT_SKIP; \
     VI_STRIP(i); \
-    WRITE_VSTART(i); \
-    for (reg_t fn = 0; fn < nf; ++fn) { \
-      elt_width##_t val = MMU.load<elt_width##_t>( \
-        baseAddr + (stride) + (offset) * sizeof(elt_width##_t)); \
-      P.VU.elt<elt_width##_t>(vd + fn * emul, vreg_inx, true) = val; \
-    } \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      for (reg_t fn = 0; fn < nf; ++fn) { \
+        elt_width##_t val = MMU.load<elt_width##_t>( \
+          baseAddr + (stride) + (offset) * sizeof(elt_width##_t)); \
+        P.VU.elt<elt_width##_t>(vd + fn * emul, vreg_inx, true) = val; \
+      } \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
@@ -1290,27 +1303,29 @@ VI_VX_ULOOP({ \
     VI_LDST_GET_INDEX(elt_width); \
     VI_ELEMENT_SKIP; \
     VI_STRIP(i); \
-    WRITE_VSTART(i); \
-    for (reg_t fn = 0; fn < nf; ++fn) { \
-      switch (P.VU.vsew) { \
-        case e8: \
-          P.VU.elt<uint8_t>(vd + fn * flmul, vreg_inx, true) = \
-            MMU.load<uint8_t>(baseAddr + index + fn * 1); \
-          break; \
-        case e16: \
-          P.VU.elt<uint16_t>(vd + fn * flmul, vreg_inx, true) = \
-            MMU.load<uint16_t>(baseAddr + index + fn * 2); \
-          break; \
-        case e32: \
-          P.VU.elt<uint32_t>(vd + fn * flmul, vreg_inx, true) = \
-            MMU.load<uint32_t>(baseAddr + index + fn * 4); \
-          break; \
-        default: \
-          P.VU.elt<uint64_t>(vd + fn * flmul, vreg_inx, true) = \
-            MMU.load<uint64_t>(baseAddr + index + fn * 8); \
-          break; \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      for (reg_t fn = 0; fn < nf; ++fn) { \
+        switch (P.VU.vsew) { \
+          case e8: \
+            P.VU.elt<uint8_t>(vd + fn * flmul, vreg_inx, true) = \
+              MMU.load<uint8_t>(baseAddr + index + fn * 1); \
+            break; \
+          case e16: \
+            P.VU.elt<uint16_t>(vd + fn * flmul, vreg_inx, true) = \
+              MMU.load<uint16_t>(baseAddr + index + fn * 2); \
+            break; \
+          case e32: \
+            P.VU.elt<uint32_t>(vd + fn * flmul, vreg_inx, true) = \
+              MMU.load<uint32_t>(baseAddr + index + fn * 4); \
+            break; \
+          default: \
+            P.VU.elt<uint64_t>(vd + fn * flmul, vreg_inx, true) = \
+              MMU.load<uint64_t>(baseAddr + index + fn * 8); \
+            break; \
+        } \
       } \
-    } \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
@@ -1323,12 +1338,14 @@ VI_VX_ULOOP({ \
   for (reg_t i = 0; i < vl; ++i) { \
     VI_STRIP(i) \
     VI_ELEMENT_SKIP; \
-    WRITE_VSTART(i); \
-    for (reg_t fn = 0; fn < nf; ++fn) { \
-      elt_width##_t val = P.VU.elt<elt_width##_t>(vs3 + fn * emul, vreg_inx); \
-      MMU.store<elt_width##_t>( \
-        baseAddr + (stride) + (offset) * sizeof(elt_width##_t), val); \
-    } \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      for (reg_t fn = 0; fn < nf; ++fn) { \
+        elt_width##_t val = P.VU.elt<elt_width##_t>(vs3 + fn * emul, vreg_inx); \
+        MMU.store<elt_width##_t>( \
+          baseAddr + (stride) + (offset) * sizeof(elt_width##_t), val); \
+      } \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
@@ -1344,27 +1361,29 @@ VI_VX_ULOOP({ \
     VI_LDST_GET_INDEX(elt_width); \
     VI_STRIP(i) \
     VI_ELEMENT_SKIP; \
-    WRITE_VSTART(i); \
-    for (reg_t fn = 0; fn < nf; ++fn) { \
-      switch (P.VU.vsew) { \
-      case e8: \
-        MMU.store<uint8_t>(baseAddr + index + fn * 1, \
-          P.VU.elt<uint8_t>(vs3 + fn * flmul, vreg_inx)); \
-        break; \
-      case e16: \
-        MMU.store<uint16_t>(baseAddr + index + fn * 2, \
-          P.VU.elt<uint16_t>(vs3 + fn * flmul, vreg_inx)); \
-        break; \
-      case e32: \
-        MMU.store<uint32_t>(baseAddr + index + fn * 4, \
-          P.VU.elt<uint32_t>(vs3 + fn * flmul, vreg_inx)); \
-        break; \
-      default: \
-        MMU.store<uint64_t>(baseAddr + index + fn * 8, \
-          P.VU.elt<uint64_t>(vs3 + fn * flmul, vreg_inx)); \
-        break; \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      for (reg_t fn = 0; fn < nf; ++fn) { \
+        switch (P.VU.vsew) { \
+        case e8: \
+          MMU.store<uint8_t>(baseAddr + index + fn * 1, \
+            P.VU.elt<uint8_t>(vs3 + fn * flmul, vreg_inx)); \
+          break; \
+        case e16: \
+          MMU.store<uint16_t>(baseAddr + index + fn * 2, \
+            P.VU.elt<uint16_t>(vs3 + fn * flmul, vreg_inx)); \
+          break; \
+        case e32: \
+          MMU.store<uint32_t>(baseAddr + index + fn * 4, \
+            P.VU.elt<uint32_t>(vs3 + fn * flmul, vreg_inx)); \
+          break; \
+        default: \
+          MMU.store<uint64_t>(baseAddr + index + fn * 8, \
+            P.VU.elt<uint64_t>(vs3 + fn * flmul, vreg_inx)); \
+          break; \
+        } \
       } \
-    } \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
@@ -1413,9 +1432,11 @@ VI_VX_ULOOP({ \
   const reg_t elt_per_reg = P.VU.vlenb / sizeof(elt_width ## _t); \
   const reg_t size = len * elt_per_reg; \
   for (reg_t i = P.VU.vstart->read(); i < size; i++) { \
-    WRITE_VSTART(i); \
-    auto val = MMU.load<elt_width##_t>(baseAddr + i * sizeof(elt_width ## _t)); \
-    P.VU.elt<elt_width ## _t>(vd, i, true) = val; \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      auto val = MMU.load<elt_width##_t>(baseAddr + i * sizeof(elt_width ## _t)); \
+      P.VU.elt<elt_width ## _t>(vd, i, true) = val; \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
@@ -1427,9 +1448,11 @@ VI_VX_ULOOP({ \
   require_align(vs3, len); \
   const reg_t size = len * P.VU.vlenb; \
   for (reg_t i = P.VU.vstart->read(); i < size; i++) { \
-    WRITE_VSTART(i); \
-    auto val = P.VU.elt<uint8_t>(vs3, i); \
-    MMU.store<uint8_t>(baseAddr + i, val); \
+    VI_LDST_PREPARE_VSTART(i); \
+    try { \
+      auto val = P.VU.elt<uint8_t>(vs3, i); \
+      MMU.store<uint8_t>(baseAddr + i, val); \
+    } VI_LDST_RETHROW(i); \
   } \
   VECTOR_END;
 
