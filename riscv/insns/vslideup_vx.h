@@ -2,8 +2,9 @@
 VI_CHECK_SLIDE(true);
 
 const reg_t offset = RS1;
+const reg_t vstart = P.VU.vstart->read_raw();
 VI_LOOP_BASE
-if (P.VU.vstart->read() < offset && i < offset)
+if (vstart < offset && i < offset)
   continue;
 
 switch (sew) {
