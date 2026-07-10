@@ -9,6 +9,21 @@ riscv_subproject_deps = \
 
 riscv_CFLAGS = -fPIC -I$(src_dir)/fdt
 
+# Optional target tuning for simple integer handlers.  Keeping these flags
+# scoped avoids changing branch and memory instruction code generation.
+riscv_fast_alu_objs = \
+	and.o \
+	andi.o \
+	or.o \
+	slli.o \
+	sltu.o \
+	srli.o \
+	sub.o \
+	xor.o \
+	xori.o \
+
+$(riscv_fast_alu_objs): private riscv_CFLAGS += $(RISCV_FAST_ALU_CFLAGS)
+
 riscv_install_shared_lib = yes
 
 riscv_install_pcs = yes
