@@ -97,25 +97,32 @@ private:
   reg_t get_pmlen(bool effective_virt, reg_t effective_priv, xlate_flags_t flags) const;
   mem_access_info_t generate_access_info(reg_t addr, access_type type, xlate_flags_t xlate_flags);
 
+  template<typename T>
+  T NOINLINE load_slow_path_value(reg_t addr, xlate_flags_t xlate_flags) {
+    target_endian<T> res;
+    load_slow_path(addr, sizeof(T), (uint8_t*)&res, xlate_flags);
+    return from_target(res);
+  }
+
 public:
   mmu_t(simif_t* sim, endianness_t endianness, processor_t* proc, reg_t cache_blocksz);
   ~mmu_t();
 
   template<typename T>
   T ALWAYS_INLINE load(reg_t addr, xlate_flags_t xlate_flags = {}) {
-    target_endian<T> res;
+    T res;
     bool aligned = (addr & (sizeof(T) - 1)) == 0;
     auto [tlb_hit, host_addr, _] = access_tlb(tlb_load, addr);
 
     if (likely(!xlate_flags.is_special_access() && aligned && tlb_hit)) {
-      res = *(target_endian<T>*)host_addr;
+      res = from_target(*(target_endian<T>*)host_addr);
     } else {
-      load_slow_path(addr, sizeof(T), (uint8_t*)&res, xlate_flags);
+      res = load_slow_path_value<T>(addr, xlate_flags);
     }
 
-    MMU_OBSERVE_LOAD(addr,from_target(res),sizeof(T));
+    MMU_OBSERVE_LOAD(addr,res,sizeof(T));
 
-    return from_target(res);
+    return res;
   }
 
   template<typename T>
