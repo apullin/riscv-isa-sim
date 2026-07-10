@@ -129,7 +129,13 @@
 #define FRS3_D READ_FREG_D(insn.rs3())
 #define dirty_fp_state  STATE.sstatus->dirty(SSTATUS_FS)
 #define dirty_ext_state STATE.sstatus->dirty(SSTATUS_XS)
-#define DO_WRITE_FREG(reg, value) (STATE.FPR.write(reg, value), dirty_fp_state)
+#define DO_WRITE_FREG(reg, value) ({ \
+  STATE.FPR.write(reg, value); \
+  if constexpr (DECODE_MACRO_USAGE_LOGGED) \
+    dirty_fp_state; \
+  else if (unlikely(!fp_state_was_dirty)) \
+    dirty_fp_state; \
+})
 #define WRITE_FRD(value) WRITE_FREG(insn.rd(), value)
 #define WRITE_FRD_H(value) \
 do { \
@@ -181,7 +187,21 @@ static inline bool is_aligned(const unsigned val, const unsigned pos)
 #define require_rv32 require(xlen == 32)
 #define require_extension(s) require(p->extension_enabled(s))
 #define require_either_extension(A,B) require(p->extension_enabled(A) || p->extension_enabled(B));
-#define require_fp          STATE.fflags->verify_permissions(insn, false)
+// Reuse the permission check's status snapshot when the instruction writes an FPR.
+#define require_fp \
+const reg_t fp_status_before_insn = STATE.mstatus->read_raw(); \
+const bool UNUSED fp_state_was_dirty = !STATE.v && \
+  (fp_status_before_insn & SSTATUS_FS) == SSTATUS_FS; \
+do { \
+  if constexpr (DECODE_MACRO_USAGE_LOGGED) { \
+    STATE.fflags->verify_permissions(insn, false); \
+  } else if (unlikely(STATE.v) || \
+             unlikely(p->extension_enabled(EXT_ZFINX)) || \
+             unlikely(!p->extension_enabled('F')) || \
+             unlikely((fp_status_before_insn & SSTATUS_FS) == 0)) { \
+    STATE.fflags->verify_permissions(insn, false); \
+  } \
+} while (0)
 #define require_accelerator require(STATE.sstatus->enabled(SSTATUS_XS))
 #define require_vector_vs   require(p->any_vector_extensions() && STATE.sstatus->enabled(SSTATUS_VS))
 #define require_vector(alu) \
