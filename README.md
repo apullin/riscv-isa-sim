@@ -1,6 +1,49 @@
 Spike RISC-V ISA Simulator
 ============================
 
+Performance-Optimized Fork
+--------------------------
+
+This fork is a substantial performance-focused modification of upstream
+Spike, comprising 25 performance commits.  Across nine frozen benchmark
+lanes, the full Zen 2 optimized endpoint reduces geometric-mean runtime by
+57.7%.  A same-toolchain source comparison on Neoverse V3AE reduces it by
+47.3%.
+
+| Benchmark lane | Zen 2 reduction | Zen 2 speedup | Neoverse V3AE reduction | Neoverse V3AE speedup |
+| --- | ---: | ---: | ---: | ---: |
+| Integer | 25.2% | 1.34x | 0.2% | 1.00x |
+| Branch | 11.4% | 1.13x | -1.0% | 0.99x |
+| Memory | 8.9% | 1.10x | 0.6% | 1.01x |
+| Floating point | 77.2% | 4.39x | 64.0% | 2.78x |
+| CSR | 66.0% | 2.94x | 32.6% | 1.48x |
+| Indirect CSR | 62.9% | 2.69x | 69.0% | 3.23x |
+| Vector | 77.0% | 4.34x | 72.3% | 3.62x |
+| Vector mask | 66.9% | 3.02x | 62.0% | 2.63x |
+| Vector slide | 67.0% | 3.03x | 60.6% | 2.54x |
+
+These are purpose-built synthetic RISC-V assembly stress tests created for
+this optimization work; they are not benchmarks shipped with upstream Spike.
+The fixed scales target 10-30 second baseline runs on Zen 2 and were not
+rescaled for ARM.  No guest source, ELF, or iteration count differs between
+host comparisons.
+
+The Zen 2 results are medians of 16 pinned same-CPU A/B pairs.  The winning
+build uses Clang 21 with ThinLTO
+(`-O3 -march=native -flto=thin`), weighted PGO, and the targeted
+`RISCV_FAST_ALU_CFLAGS=-mno-bmi` tuning option on an AMD Ryzen Threadripper PRO
+3975WX 32-Core processor (x86_64).
+
+The Neoverse results are medians of 12 pinned same-CPU A/B pairs with six
+workers on an NVIDIA Jetson AGX Thor Developer Kit (aarch64).  Both endpoints
+use Clang 21 with `-O3 -march=native -flto=thin`, without PGO or x86-specific
+tuning.  The reusable build configuration is provided by
+`scripts/build-clang-perf.sh`.
+
+Both hosts compare against unmodified upstream commit
+[`55b4658d`](https://github.com/riscv-software-src/riscv-isa-sim/commit/55b4658dbf574ba0b714083ec436ce2cb5be1998);
+results are host- and workload-specific.
+
 About
 -------------
 
