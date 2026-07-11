@@ -116,6 +116,26 @@ install path.
 If your system uses the `yum` package manager, you can substitute
 `yum install dtc` for the first step.
 
+Optimized Clang Build
+---------------------
+
+By default, `configure` uses Clang 21 with `-O3`, host-native code generation,
+and ThinLTO when the matching LLVM tools are available.  Otherwise it warns
+and falls back to the normal compiler search, which selects GCC on typical
+Linux systems.  Explicit `CC`, `CXX`, `AR`, and `RANLIB` settings take
+precedence over automatic selection.
+
+    $ mkdir build-clang-lto
+    $ cd build-clang-lto
+    $ ../configure --prefix=$RISCV
+    $ make
+
+Use `--enable-clang-lto=VERSION` to select another versioned LLVM toolchain,
+or `--disable-clang-lto` to force the normal compiler search.
+
+Because this mode uses `-march=native`, its binaries are not necessarily
+portable to other host CPUs.
+
 Build Steps on OpenBSD
 ----------------------
 

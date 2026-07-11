@@ -53,6 +53,79 @@ m4_include(m4/ax_boost_asio.m4)
 m4_include(m4/ax_boost_regex.m4)
 
 #-------------------------------------------------------------------------
+# Build profiles
+#-------------------------------------------------------------------------
+
+AC_ARG_ENABLE([clang-lto],
+  [AS_HELP_STRING([--enable-clang-lto@<:@=VERSION@:>@],
+    [prefer an optimized host-native Clang ThinLTO build; VERSION selects LLVM tools (default: auto-detect version 21)])],
+  [enable_clang_lto=$enableval],
+  [enable_clang_lto=auto])
+
+case "$enable_clang_lto" in
+  auto|yes)
+    spike_llvm_suffix=-21
+    ;;
+  no)
+    ;;
+  *[[!0-9]]*|'')
+    AC_MSG_ERROR([--enable-clang-lto accepts only a numeric LLVM version])
+    ;;
+  *)
+    spike_llvm_suffix="-$enable_clang_lto"
+    ;;
+esac
+
+spike_use_clang_lto=no
+
+AS_IF([test "x$enable_clang_lto" != xno], [
+  spike_clang_cc=clang$spike_llvm_suffix
+  spike_clang_cxx=clang++$spike_llvm_suffix
+  spike_clang_ar=llvm-ar$spike_llvm_suffix
+  spike_clang_ranlib=llvm-ranlib$spike_llvm_suffix
+
+  AS_IF([test "x$enable_clang_lto" = xauto && test "x$build" != "x$host"], [
+    AC_MSG_NOTICE([cross-compiling; skipping automatic Clang ThinLTO selection])
+  ], [
+    AS_IF([test "x$enable_clang_lto" = xauto &&
+           { test -n "${CC-}" || test -n "${CXX-}" ||
+             test -n "${AR-}" || test -n "${RANLIB-}"; }], [
+      AC_MSG_NOTICE([compiler tools were supplied; skipping automatic Clang ThinLTO selection])
+    ], [
+      AS_IF([test -n "${CC-}" || test -n "${CXX-}" ||
+             test -n "${AR-}" || test -n "${RANLIB-}"], [
+        CC=${CC:-$spike_clang_cc}
+        CXX=${CXX:-$spike_clang_cxx}
+        AR=${AR:-$spike_clang_ar}
+        RANLIB=${RANLIB:-$spike_clang_ranlib}
+        spike_use_clang_lto=yes
+      ], [
+        spike_missing_llvm_tools=
+        for spike_llvm_tool in "$spike_clang_cc" "$spike_clang_cxx" \
+                               "$spike_clang_ar" "$spike_clang_ranlib"; do
+          if command -v "$spike_llvm_tool" >/dev/null 2>&1 &&
+             "$spike_llvm_tool" --version >/dev/null 2>&1; then
+            :
+          else
+            spike_missing_llvm_tools="$spike_missing_llvm_tools $spike_llvm_tool"
+          fi
+        done
+
+        AS_IF([test -z "$spike_missing_llvm_tools"], [
+          CC=$spike_clang_cc
+          CXX=$spike_clang_cxx
+          AR=$spike_clang_ar
+          RANLIB=$spike_clang_ranlib
+          spike_use_clang_lto=yes
+        ], [
+          AC_MSG_WARN([Clang ThinLTO tools unavailable:$spike_missing_llvm_tools; falling back to the default toolchain])
+        ])
+      ])
+    ])
+  ])
+])
+
+#-------------------------------------------------------------------------
 # Checks for programs
 #-------------------------------------------------------------------------
 
@@ -65,6 +138,68 @@ AS_IF([test x"$DTC" == xno],AC_MSG_ERROR([device-tree-compiler not found]))
 AC_DEFINE_UNQUOTED(DTC, ["dtc"], [Executable name of device-tree-compiler])
 
 AC_C_BIGENDIAN
+
+SPIKE_OPT_CFLAGS=
+SPIKE_OPT_LDFLAGS=
+
+AS_IF([test "x$spike_use_clang_lto" = xyes], [
+  spike_cc_is_clang=no
+  spike_cxx_is_clang=no
+
+  AC_LANG_PUSH([C])
+  AC_MSG_CHECKING([whether $CC is Clang])
+  AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([[
+#ifndef __clang__
+# error This compiler is not Clang
+#endif
+    ]])],
+    [AC_MSG_RESULT([yes]); spike_cc_is_clang=yes],
+    [AC_MSG_RESULT([no])])
+  AC_LANG_POP([C])
+
+  AC_LANG_PUSH([C++])
+  AC_MSG_CHECKING([whether $CXX is Clang])
+  AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([[
+#ifndef __clang__
+# error This compiler is not Clang
+#endif
+    ]])],
+    [AC_MSG_RESULT([yes]); spike_cxx_is_clang=yes],
+    [AC_MSG_RESULT([no])])
+  AC_LANG_POP([C++])
+
+  AS_IF([test "x$spike_cc_is_clang" = xyes &&
+         test "x$spike_cxx_is_clang" = xyes], [
+    spike_clang_lto_flags_ok=yes
+
+    AC_LANG_PUSH([C])
+    AX_CHECK_COMPILE_FLAG([-O3], [], [spike_clang_lto_flags_ok=no])
+    AX_CHECK_COMPILE_FLAG([-march=native], [], [spike_clang_lto_flags_ok=no])
+    AX_CHECK_COMPILE_FLAG([-flto=thin], [], [spike_clang_lto_flags_ok=no])
+    AC_LANG_POP([C])
+
+    AC_LANG_PUSH([C++])
+    AX_CHECK_COMPILE_FLAG([-O3], [], [spike_clang_lto_flags_ok=no])
+    AX_CHECK_COMPILE_FLAG([-march=native], [], [spike_clang_lto_flags_ok=no])
+    AX_CHECK_COMPILE_FLAG([-flto=thin], [], [spike_clang_lto_flags_ok=no])
+    AX_CHECK_LINK_FLAG([-flto=thin], [], [spike_clang_lto_flags_ok=no])
+    AC_LANG_POP([C++])
+
+    AS_IF([test "x$spike_clang_lto_flags_ok" = xyes], [
+      SPIKE_OPT_CFLAGS="-O3 -march=native -flto=thin"
+      SPIKE_OPT_LDFLAGS="-flto=thin"
+    ], [
+      AC_MSG_WARN([Clang ThinLTO flags are unsupported; continuing without the optimized build profile])
+    ])
+  ], [
+    AC_MSG_WARN([the selected compilers are not Clang; continuing without the optimized build profile])
+  ])
+])
+
+AC_SUBST([SPIKE_OPT_CFLAGS])
+AC_SUBST([SPIKE_OPT_LDFLAGS])
 
 #-------------------------------------------------------------------------
 # MCPPBS specific program checks

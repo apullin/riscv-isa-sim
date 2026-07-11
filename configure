@@ -658,6 +658,8 @@ INSTALL_PROGRAM
 STOW_PREFIX
 STOW_ROOT
 enable_stow
+SPIKE_OPT_LDFLAGS
+SPIKE_OPT_CFLAGS
 DTC
 RANLIB
 AR
@@ -721,6 +723,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+enable_clang_lto
 enable_stow
 enable_optional_subprojects
 with_boost
@@ -1365,6 +1368,10 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-clang-lto[=VERSION]
+                          prefer an optimized host-native Clang ThinLTO build;
+                          VERSION selects LLVM tools (default: auto-detect
+                          version 21)
   --enable-stow           Enable stow-based install
   --enable-optional-subprojects
                           Enable all optional subprojects
@@ -3220,6 +3227,113 @@ case $host_os in *\ *) host_os=`echo "$host_os" | sed 's/ /-/g'`;; esac
 
 
 
+
+#-------------------------------------------------------------------------
+# Build profiles
+#-------------------------------------------------------------------------
+
+# Check whether --enable-clang-lto was given.
+if test ${enable_clang_lto+y}
+then :
+  enableval=$enable_clang_lto; enable_clang_lto=$enableval
+else case e in #(
+  e) enable_clang_lto=auto ;;
+esac
+fi
+
+
+case "$enable_clang_lto" in
+  auto|yes)
+    spike_llvm_suffix=-21
+    ;;
+  no)
+    ;;
+  *[!0-9]*|'')
+    as_fn_error $? "--enable-clang-lto accepts only a numeric LLVM version" "$LINENO" 5
+    ;;
+  *)
+    spike_llvm_suffix="-$enable_clang_lto"
+    ;;
+esac
+
+spike_use_clang_lto=no
+
+if test "x$enable_clang_lto" != xno
+then :
+
+  spike_clang_cc=clang$spike_llvm_suffix
+  spike_clang_cxx=clang++$spike_llvm_suffix
+  spike_clang_ar=llvm-ar$spike_llvm_suffix
+  spike_clang_ranlib=llvm-ranlib$spike_llvm_suffix
+
+  if test "x$enable_clang_lto" = xauto && test "x$build" != "x$host"
+then :
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: cross-compiling; skipping automatic Clang ThinLTO selection" >&5
+printf "%s\n" "$as_me: cross-compiling; skipping automatic Clang ThinLTO selection" >&6;}
+
+else case e in #(
+  e)
+    if test "x$enable_clang_lto" = xauto &&
+           { test -n "${CC-}" || test -n "${CXX-}" ||
+             test -n "${AR-}" || test -n "${RANLIB-}"; }
+then :
+
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: compiler tools were supplied; skipping automatic Clang ThinLTO selection" >&5
+printf "%s\n" "$as_me: compiler tools were supplied; skipping automatic Clang ThinLTO selection" >&6;}
+
+else case e in #(
+  e)
+      if test -n "${CC-}" || test -n "${CXX-}" ||
+             test -n "${AR-}" || test -n "${RANLIB-}"
+then :
+
+        CC=${CC:-$spike_clang_cc}
+        CXX=${CXX:-$spike_clang_cxx}
+        AR=${AR:-$spike_clang_ar}
+        RANLIB=${RANLIB:-$spike_clang_ranlib}
+        spike_use_clang_lto=yes
+
+else case e in #(
+  e)
+        spike_missing_llvm_tools=
+        for spike_llvm_tool in "$spike_clang_cc" "$spike_clang_cxx" \
+                               "$spike_clang_ar" "$spike_clang_ranlib"; do
+          if command -v "$spike_llvm_tool" >/dev/null 2>&1 &&
+             "$spike_llvm_tool" --version >/dev/null 2>&1; then
+            :
+          else
+            spike_missing_llvm_tools="$spike_missing_llvm_tools $spike_llvm_tool"
+          fi
+        done
+
+        if test -z "$spike_missing_llvm_tools"
+then :
+
+          CC=$spike_clang_cc
+          CXX=$spike_clang_cxx
+          AR=$spike_clang_ar
+          RANLIB=$spike_clang_ranlib
+          spike_use_clang_lto=yes
+
+else case e in #(
+  e)
+          { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Clang ThinLTO tools unavailable:$spike_missing_llvm_tools; falling back to the default toolchain" >&5
+printf "%s\n" "$as_me: WARNING: Clang ThinLTO tools unavailable:$spike_missing_llvm_tools; falling back to the default toolchain" >&2;}
+         ;;
+esac
+fi
+       ;;
+esac
+fi
+     ;;
+esac
+fi
+   ;;
+esac
+fi
+
+fi
 
 #-------------------------------------------------------------------------
 # Checks for programs
@@ -5170,6 +5284,461 @@ printf "%s\n" "#define AC_APPLE_UNIVERSAL_BUILD 1" >>confdefs.h
      as_fn_error $? "unknown endianness
  presetting ac_cv_c_bigendian=no (or yes) will help" "$LINENO" 5 ;;
  esac
+
+
+SPIKE_OPT_CFLAGS=
+SPIKE_OPT_LDFLAGS=
+
+
+if test "x$spike_use_clang_lto" = xyes
+then :
+
+  spike_cc_is_clang=no
+  spike_cxx_is_clang=no
+
+  ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether $CC is Clang" >&5
+printf %s "checking whether $CC is Clang... " >&6; }
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#ifndef __clang__
+# error This compiler is not Clang
+#endif
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }; spike_cc_is_clang=yes
+else case e in #(
+  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; } ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+
+  ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether $CXX is Clang" >&5
+printf %s "checking whether $CXX is Clang... " >&6; }
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#ifndef __clang__
+# error This compiler is not Clang
+#endif
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"
+then :
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; }; spike_cxx_is_clang=yes
+else case e in #(
+  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; } ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+
+  if test "x$spike_cc_is_clang" = xyes &&
+         test "x$spike_cxx_is_clang" = xyes
+then :
+
+    spike_clang_lto_flags_ok=yes
+
+    ac_ext=c
+ac_cpp='$CPP $CPPFLAGS'
+ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C compiler accepts -O3" >&5
+printf %s "checking whether the C compiler accepts -O3... " >&6; }
+if test ${ax_cv_check_cflags___O3+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CFLAGS
+  if test x"$GCC" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CFLAGS="$CFLAGS  -O3 $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ax_cv_check_cflags___O3=yes
+else case e in #(
+  e) ax_cv_check_cflags___O3=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags___O3" >&5
+printf "%s\n" "$ax_cv_check_cflags___O3" >&6; }
+if test "x$ax_cv_check_cflags___O3" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C compiler accepts -march=native" >&5
+printf %s "checking whether the C compiler accepts -march=native... " >&6; }
+if test ${ax_cv_check_cflags___march_native+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CFLAGS
+  if test x"$GCC" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CFLAGS="$CFLAGS  -march=native $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ax_cv_check_cflags___march_native=yes
+else case e in #(
+  e) ax_cv_check_cflags___march_native=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags___march_native" >&5
+printf "%s\n" "$ax_cv_check_cflags___march_native" >&6; }
+if test "x$ax_cv_check_cflags___march_native" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C compiler accepts -flto=thin" >&5
+printf %s "checking whether the C compiler accepts -flto=thin... " >&6; }
+if test ${ax_cv_check_cflags___flto_thin+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CFLAGS
+  if test x"$GCC" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CFLAGS="$CFLAGS  -flto=thin $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ax_cv_check_cflags___flto_thin=yes
+else case e in #(
+  e) ax_cv_check_cflags___flto_thin=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cflags___flto_thin" >&5
+printf "%s\n" "$ax_cv_check_cflags___flto_thin" >&6; }
+if test "x$ax_cv_check_cflags___flto_thin" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+
+    ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C++ compiler accepts -O3" >&5
+printf %s "checking whether the C++ compiler accepts -O3... " >&6; }
+if test ${ax_cv_check_cxxflags___O3+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CXXFLAGS
+  if test x"$GXX" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CXXFLAGS="$CXXFLAGS  -O3 $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"
+then :
+  ax_cv_check_cxxflags___O3=yes
+else case e in #(
+  e) ax_cv_check_cxxflags___O3=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CXXFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cxxflags___O3" >&5
+printf "%s\n" "$ax_cv_check_cxxflags___O3" >&6; }
+if test "x$ax_cv_check_cxxflags___O3" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C++ compiler accepts -march=native" >&5
+printf %s "checking whether the C++ compiler accepts -march=native... " >&6; }
+if test ${ax_cv_check_cxxflags___march_native+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CXXFLAGS
+  if test x"$GXX" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CXXFLAGS="$CXXFLAGS  -march=native $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"
+then :
+  ax_cv_check_cxxflags___march_native=yes
+else case e in #(
+  e) ax_cv_check_cxxflags___march_native=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CXXFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cxxflags___march_native" >&5
+printf "%s\n" "$ax_cv_check_cxxflags___march_native" >&6; }
+if test "x$ax_cv_check_cxxflags___march_native" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the C++ compiler accepts -flto=thin" >&5
+printf %s "checking whether the C++ compiler accepts -flto=thin... " >&6; }
+if test ${ax_cv_check_cxxflags___flto_thin+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$CXXFLAGS
+  if test x"$GXX" = xyes ; then
+    add_gnu_werror="-Werror"
+  fi
+  CXXFLAGS="$CXXFLAGS  -flto=thin $add_gnu_werror"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"
+then :
+  ax_cv_check_cxxflags___flto_thin=yes
+else case e in #(
+  e) ax_cv_check_cxxflags___flto_thin=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CXXFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_cxxflags___flto_thin" >&5
+printf "%s\n" "$ax_cv_check_cxxflags___flto_thin" >&6; }
+if test "x$ax_cv_check_cxxflags___flto_thin" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether the linker accepts -flto=thin" >&5
+printf %s "checking whether the linker accepts -flto=thin... " >&6; }
+if test ${ax_cv_check_ldflags___flto_thin+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+  ax_check_save_flags=$LDFLAGS
+  LDFLAGS="$LDFLAGS  -flto=thin"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"
+then :
+  ax_cv_check_ldflags___flto_thin=yes
+else case e in #(
+  e) ax_cv_check_ldflags___flto_thin=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+  LDFLAGS=$ax_check_save_flags ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ax_cv_check_ldflags___flto_thin" >&5
+printf "%s\n" "$ax_cv_check_ldflags___flto_thin" >&6; }
+if test "x$ax_cv_check_ldflags___flto_thin" = xyes
+then :
+  :
+else case e in #(
+  e) spike_clang_lto_flags_ok=no ;;
+esac
+fi
+
+    ac_ext=cpp
+ac_cpp='$CXXCPP $CPPFLAGS'
+ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
+ac_link='$CXX -o conftest$ac_exeext $CXXFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
+ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
+
+
+    if test "x$spike_clang_lto_flags_ok" = xyes
+then :
+
+      SPIKE_OPT_CFLAGS="-O3 -march=native -flto=thin"
+      SPIKE_OPT_LDFLAGS="-flto=thin"
+
+else case e in #(
+  e)
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: Clang ThinLTO flags are unsupported; continuing without the optimized build profile" >&5
+printf "%s\n" "$as_me: WARNING: Clang ThinLTO flags are unsupported; continuing without the optimized build profile" >&2;}
+     ;;
+esac
+fi
+
+else case e in #(
+  e)
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: the selected compilers are not Clang; continuing without the optimized build profile" >&5
+printf "%s\n" "$as_me: WARNING: the selected compilers are not Clang; continuing without the optimized build profile" >&2;}
+   ;;
+esac
+fi
+
+fi
+
+
 
 
 #-------------------------------------------------------------------------
